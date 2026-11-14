@@ -1,0 +1,15 @@
+/node_modules
+/.next/
+/out/
+/build
+/dist
+*.tsbuildinfo
+next-env.d.ts
+*.log
+
+# env files
+.env*
+!.env.example
+
+# local SQLite database, uploaded music/images and rendered media
+/data/
