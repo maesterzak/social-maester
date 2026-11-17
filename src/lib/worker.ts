@@ -2,8 +2,8 @@ import fs from "node:fs"
 import { all, dataPath, run } from "./db"
 import { campaignItems, campaignPosts, getCampaign, type Item } from "./campaigns"
 import { getTrack, getUpload } from "./library"
-import { getOpportunity } from "./opportunities"
-import { writeCard } from "./media/card"
+import { getOpportunities, getOpportunity } from "./opportunities"
+import { writeCard, writeDigestCard, writeDigestSlides } from "./media/card"
 import { renderSlideshow } from "./media/video"
 import { platformInfo, publisher, missingKeys, type PlatformId } from "./platforms"
 import { sleep } from "./platforms/types"
@@ -62,13 +62,40 @@ async function renderItem(c: NonNullable<ReturnType<typeof getCampaign>>, item: 
   }
 }
 
+/** A digest's picture (TOP-N card) and video (cover + one slide per opportunity) go on its first item. */
+async function renderDigest(c: NonNullable<ReturnType<typeof getCampaign>>, items: Item[], needImage: boolean, needVideo: boolean) {
+  const first = items[0]
+  const found = await getOpportunities(items.map((i) => i.opportunity_id))
+  const opps = items.map((i) => found.get(i.opportunity_id)).filter((o): o is NonNullable<typeof o> => !!o)
+  if (opps.length < 2) throw new Error("Fewer than 2 of the digest's opportunities still exist")
+  const title = c.title ?? `Top ${opps.length} opportunities`
+  if (needImage && !(first.image_file && fs.existsSync(dataPath(first.image_file)))) {
+    const rel = mediaRel(c.id, first.id, "digest.png")
+    await writeDigestCard(title, opps, "feed", dataPath(rel))
+    run("UPDATE campaign_items SET image_file = ? WHERE id = ?", rel, first.id)
+    first.image_file = rel
+  }
+  if (needVideo && !(first.video_file && fs.existsSync(dataPath(first.video_file)))) {
+    const slides = await writeDigestSlides(title, opps, dataPath(`media/c${c.id}/digest-slides`))
+    const track = c.music_id ? getTrack(c.music_id) : undefined
+    const rel = mediaRel(c.id, first.id, "digest.mp4")
+    await renderSlideshow({
+      slides, out: dataPath(rel), slideSeconds: c.slide_seconds,
+      music: track ? { file: dataPath(track.file), start: c.music_start, volume: c.music_volume } : null,
+    })
+    run("UPDATE campaign_items SET video_file = ? WHERE id = ?", rel, first.id)
+    first.video_file = rel
+  }
+}
+
 async function processCampaign(id: number) {
   const c = getCampaign(id)
   if (!c) return
   run("UPDATE campaigns SET status = 'running' WHERE id = ?", id)
   const posts = campaignPosts(id)
 
-  for (const item of campaignItems(id)) {
+  const allItems = campaignItems(id)
+  for (const item of allItems) {
     const queued = posts.filter((p) => p.item_id === item.id && p.status === "queued")
     if (!queued.length) continue
     // Manual sharing always gets the picture too (handy to paste anywhere).
@@ -77,7 +104,8 @@ async function processCampaign(id: number) {
 
     for (const p of queued) run("UPDATE posts SET status = 'rendering', updated_at = ? WHERE id = ?", Date.now(), p.id)
     try {
-      await renderItem(c, item, needImage, needVideo)
+      if (c.kind === "digest") await renderDigest(c, allItems, needImage, needVideo)
+      else await renderItem(c, item, needImage, needVideo)
       run("UPDATE campaign_items SET error = NULL WHERE id = ?", item.id)
     } catch (e) {
       const msg = `Couldn't make the picture/video: ${(e as Error).message}`
@@ -105,7 +133,8 @@ async function processCampaign(id: number) {
         } else {
           const missing = missingKeys(info)
           if (missing.length) throw new Error(`${info.name} isn't set up (missing ${missing.join(", ")})`)
-          result = await publisher(p.platform as PlatformId)({ caption: p.caption, title: item.title, file: dataPath(file) })
+          const title = c.kind === "digest" ? c.title ?? item.title : item.title
+          result = await publisher(p.platform as PlatformId)({ caption: p.caption, title, file: dataPath(file) })
         }
         run("UPDATE posts SET status = 'done', external_id = ?, url = ?, error = NULL, updated_at = ? WHERE id = ?",
           result.externalId, result.url ?? null, Date.now(), p.id)

@@ -4,6 +4,7 @@ import { publishLinkedIn } from "./linkedin"
 import { publishTelegram } from "./telegram"
 import { publishTikTok } from "./tiktok"
 import { publishX } from "./x"
+import { publishYouTube } from "./youtube"
 import type { PlatformId, PlatformInfo, Publisher } from "./types"
 
 export type { PlatformId, PlatformInfo } from "./types"
@@ -18,11 +19,12 @@ export const PLATFORMS: PlatformDef[] = [
   { id: "whatsapp", name: "WhatsApp", media: "image", captionLimit: 4000, connection: null, envKeys: [], manualOnly: true },
   { id: "instagram", name: "Instagram Reels", media: "video", captionLimit: 2200, connection: "meta", envKeys: ["IG_USER_ID", "IG_ACCESS_TOKEN"], linksDead: true },
   { id: "tiktok", name: "TikTok", media: "video", captionLimit: 2200, connection: "tiktok", envKeys: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_REFRESH_TOKEN"], linksDead: true },
+  { id: "youtube", name: "YouTube Shorts", media: "video", captionLimit: 4900, connection: "youtube", envKeys: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"], linksDead: true },
 ]
 
 const PUBLISHERS: Record<PlatformId, Publisher> = {
   x: publishX, facebook: publishFacebook, linkedin: publishLinkedIn, telegram: publishTelegram,
-  instagram: publishInstagram, tiktok: publishTikTok,
+  instagram: publishInstagram, tiktok: publishTikTok, youtube: publishYouTube,
   whatsapp: async () => { throw new Error("WhatsApp has no posting API — use “Share myself”") },
 }
 

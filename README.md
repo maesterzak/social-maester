@@ -4,8 +4,12 @@ Social media posting tool for PathMaester jobs and scholarships. Select up to **
 then either share them yourself from prepared tabs or auto-post through the APIs:
 
 - **Picture posts** (X, Facebook Page, LinkedIn, Telegram channel): an auto-made 4:5 card + caption.
-- **Video posts** (Instagram Reels, TikTok): a 9:16 slideshow (vertical card + any extra pictures) with
+- **Video posts** (Instagram Reels, TikTok, YouTube Shorts): a 9:16 slideshow (vertical card + any extra pictures) with
   **background music** you upload, choosing the start point and volume. "Preview video" shows the exact result first.
+
+The home page is an **opportunity hub**: every job is sorted by who it is for (Digital work, Physical work, Quick start for
+people with little experience, Scholarships). Smart sets suggest 3 unposted items per audience, and the caption, card label
+and music adapt to that audience.
 
 Captions are generated for each platform (X fits 280 chars) and can be edited before posting.
 
@@ -51,6 +55,7 @@ Set `DRY_RUN=0` to post for real. Account tokens are saved in `data/social.db` (
 - Instagram: professional account linked to the Facebook Page; one Meta login covers both.
 - TikTok: login callbacks must be https, so set `APP_URL` to a tunnel or the deployed site. Posts stay
   private (SELF_ONLY) until TikTok audits the app.
+- YouTube: Google Cloud project with YouTube Data API v3; uploads stay private until Google verifies the project.
 - LinkedIn: tokens last 60 days; the page shows when to reconnect.
 
 ## PathMaester connection

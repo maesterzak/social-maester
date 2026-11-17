@@ -4,7 +4,7 @@ import { buildCaption } from "@/lib/caption"
 import { getOpportunity } from "@/lib/opportunities"
 import { PLATFORMS } from "@/lib/platforms"
 
-const Body = z.object({ ids: z.array(z.string()).max(3) })
+const Body = z.object({ ids: z.array(z.string()).max(5) })
 
 // Default caption for every platform, per selected opportunity.
 export async function POST(req: Request) {

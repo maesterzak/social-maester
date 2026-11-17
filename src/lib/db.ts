@@ -111,11 +111,12 @@ export function db(): DatabaseSync {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
     g.__socialDb = new DatabaseSync(DB_PATH)
   }
-  // Re-applied when the schema text changes, so dev hot reload picks up new tables.
-  if (g.__socialSchema !== SCHEMA) {
+  // Re-applied when the schema or the added columns change, so dev hot reload picks up new tables and columns.
+  const key = SCHEMA + JSON.stringify(COLUMNS)
+  if (g.__socialSchema !== key) {
     g.__socialDb.exec(SCHEMA)
     migrate(g.__socialDb)
-    g.__socialSchema = SCHEMA
+    g.__socialSchema = key
   }
   return g.__socialDb
 }
@@ -124,6 +125,9 @@ export function db(): DatabaseSync {
 const COLUMNS: [table: string, column: string, ddl: string][] = [
   // auto = posted through the APIs; manual = media made, the user shares it from prepared tabs
   ["campaigns", "mode", "TEXT NOT NULL DEFAULT 'auto'"],
+  // single = one post per opportunity; digest = one post listing all of the campaign's opportunities (Top 5)
+  ["campaigns", "kind", "TEXT NOT NULL DEFAULT 'single'"],
+  ["campaigns", "title", "TEXT"],
 ]
 
 function migrate(d: DatabaseSync) {

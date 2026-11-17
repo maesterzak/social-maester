@@ -35,10 +35,13 @@ export function shareTarget(platform: string, caption: string, link: string | nu
         hint: "Facebook won't take ready-made text: Open copies the caption, paste it (Ctrl+V), choose “Share to a Page”, then Post." }
     case "instagram":
       return { url: "https://www.instagram.com/", prefilled: false, attach: "video",
-        hint: "Open copies the caption. Click Create (+) → upload the downloaded video as a Reel, paste the caption, Share." }
+        hint: "Open copies the caption and downloads the video. Click Create (+) → upload it as a Reel, paste the caption, Share." }
     case "tiktok":
       return { url: "https://www.tiktok.com/tiktokstudio/upload", prefilled: false, attach: "video",
-        hint: "Open copies the caption. Upload the downloaded video, paste the caption, Post." }
+        hint: "Open copies the caption and downloads the video. Upload that video, paste the caption, Post." }
+    case "youtube":
+      return { url: "https://www.youtube.com/upload", prefilled: false, attach: "video",
+        hint: "Open copies the caption and downloads the video. Upload it (a vertical video becomes a Short), paste the caption as the description, Publish." }
     default:
       return { url: "about:blank", prefilled: false, attach: "image", hint: "" }
   }

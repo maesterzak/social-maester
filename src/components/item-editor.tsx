@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { hookLines } from "@/lib/intel"
 import { captionLength } from "@/lib/text-length"
 import { api, type MusicChoice, type OppLite, type Pic, type PlatformLite } from "./types"
 
@@ -16,14 +17,36 @@ type Props = {
   music: MusicChoice
   slideSeconds: number
   onRemove: () => void
+  /** Controlled platform tab (the phone preview follows it); falls back to its own state. */
+  tab?: string
+  onTab?: (platform: string) => void
+  /** Hide the picture header (the phone preview already shows it). */
+  compact?: boolean
 }
 
 // One selected job/scholarship: its card, extra pictures for the video, and a caption per platform.
-export function ItemEditor({ opp, platforms, captions, defaults, setCaption, pics, setPics, wantsVideo, music, slideSeconds, onRemove }: Props) {
-  const [tab, setTab] = useState(platforms[0]?.id)
+export function ItemEditor({ opp, platforms, captions, defaults, setCaption, pics, setPics, wantsVideo, music, slideSeconds, onRemove, tab: tabProp, onTab, compact }: Props) {
+  const [ownTab, setOwnTab] = useState(platforms[0]?.id)
+  const tab = tabProp ?? ownTab
+  const setTab = (p: string) => { setOwnTab(p); onTab?.(p) }
   const [busy, setBusy] = useState("")
   const [error, setError] = useState("")
   const [preview, setPreview] = useState<string | null>(null)
+  const [hook, setHook] = useState(0)
+  const hooks = hookLines(opp)
+
+  // Swaps the opening line on every platform's caption; the cycle ends back at the original line.
+  function nextHook() {
+    if (!captions || !defaults) return
+    const n = (hook + 1) % (hooks.length + 1)
+    for (const p of platforms) {
+      const lines = (captions[p.id] ?? "").split("\n")
+      lines[0] = n === 0 ? defaults[p.id].split("\n")[0] : hooks[n - 1]
+      setCaption(p.id, lines.join("\n"))
+    }
+    setHook(n)
+  }
+
   const active = platforms.find((p) => p.id === tab) ?? platforms[0]
 
   async function addPic(files: FileList) {
@@ -59,12 +82,12 @@ export function ItemEditor({ opp, platforms, captions, defaults, setCaption, pic
   }
 
   return (
-    <div className="item">
+    <div className={`item a-${opp.primary}`}>
       <div className="item-head">
-        <a href={`/api/card/${opp.id}`} target="_blank" rel="noreferrer" title="Open full-size picture">
+        {!compact && <a href={`/api/card/${opp.id}`} target="_blank" rel="noreferrer" title="Open full-size picture">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="thumb" src={`/api/card/${opp.id}`} alt={`Post picture for ${opp.title}`} />
-        </a>
+        </a>}
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <span className={`badge ${opp.kind === "JOB" ? "job" : "sch"}`}>{opp.kind === "JOB" ? "Job" : "Scholarship"}</span>
@@ -120,8 +143,11 @@ export function ItemEditor({ opp, platforms, captions, defaults, setCaption, pic
           </div>
           <textarea aria-label={`${active.name} caption`} value={captions[active.id] ?? ""} onChange={(e) => setCaption(active.id, e.target.value)} />
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <button type="button" className="link small" disabled={captions[active.id] === defaults?.[active.id]}
-              onClick={() => defaults && setCaption(active.id, defaults[active.id])}>Reset caption</button>
+            <span className="row" style={{ gap: 12 }}>
+              <button type="button" className="small" title="Try a different opening line on every platform" onClick={nextHook}>✦ New opening line</button>
+              <button type="button" className="link small" disabled={captions[active.id] === defaults?.[active.id]}
+                onClick={() => { if (defaults) setCaption(active.id, defaults[active.id]); setHook(0) }}>Reset caption</button>
+            </span>
             <CaptionCounter platform={active} text={captions[active.id] ?? ""} />
           </div>
         </>

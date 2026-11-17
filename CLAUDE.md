@@ -1,7 +1,7 @@
 # social-maester
 
 Separate tool from PathMaester (never import its code). Posts up to 3 selected jobs/scholarships at once to
-X, Facebook Page, LinkedIn, Telegram (picture card) and Instagram Reels, TikTok (slideshow video + music).
+X, Facebook Page, LinkedIn, Telegram (picture card) and Instagram Reels, TikTok, YouTube Shorts (slideshow video + music).
 
 **Stack:** Next.js 16.4 (App Router; pages call `await connection()`), React 19, zod v4, built-in `node:sqlite`
 (`data/social.db`), `@resvg/resvg-js` (SVG → PNG cards), ffmpeg via PATH/`FFMPEG_PATH`, plain CSS, pnpm.
@@ -30,9 +30,43 @@ Credentials only in `.env`; `DRY_RUN=1` makes media but sends nothing.
 - UI (route group `app/(admin)/`, own layout with nav): `page.tsx` → `components/composer.tsx` (+ `item-editor.tsx`, `music-panel.tsx`),
   `campaigns/[id]` → `campaign-view.tsx` (polls), `settings`; files served by `api/files/[...path]`
 
+- Audiences: `lib/segments.ts` (pure, used by server and browser) `classify(o)` → DIGITAL / PHYSICAL work style,
+  STARTER (level NONE or ENTRY), SCHOLARSHIP (+ study levels, funded). Drives the hub in `composer.tsx` (smart sets,
+  audience tabs, sub-filters, weekday theme `WEEK_THEMES`), `caption.ts` (`audienceHeadline`, "Best for" line, hashtags),
+  the card pill (`media/card.ts`) and music auto pick (`lib/catalog.ts` `PICKS`). "NO EXPERIENCE NEEDED" is only
+  written when the listing says so (`noExperienceStated`); otherwise "EASY-ENTRY JOB".
+- Music catalog: `lib/catalog.ts` (43 Mixkit tracks) + `api/music/catalog` (download into data/music) + `music-panel.tsx`.
+- YouTube Shorts: `platforms/youtube.ts` (resumable upload, refresh token → kv `youtube_token`), `connect/youtube.ts` (Google OAuth).
+- Share kit: Safari opens one tab per click, so blocked tabs go to an "Open next" queue; video platforms download the video once.
+
+- Intelligence (`lib/intel.ts`, pure rules, runs in the browser, no AI service): `parseIntent` (ask bar → audience/sub/
+  remote/soon/fresh + leftover text; composer relaxes the timing words when nothing matches), `reachScore` (0–99 with
+  reasons, default sort), `hookLines` (alternative opening lines, item-editor "New opening line"), `BEST_TIMES` (rules of thumb).
+- Maester's pick (`intel.ts` `maesterPick`/`drawScore`/`PLATFORM_CROWD`): reach + who can apply (audience is worldwide: unrestricted
+  remote and scholarships gain, country-bound jobs lose points) + average fit with the ticked platforms' crowds. Composer pre-selects it once on load.
+- Who can apply: `lib/eligibility.ts` `whoCanApply(o)` reads eligibility lines/summary/location → scope WORLD / REGION /
+  COUNTRY / UNKNOWN + an "Open to: …" label (on Segment as `scope`/`scopeLabel`). Used by the pick score (audience is
+  worldwide), the "Open worldwide" filter + badges, and the caption line. COUNTRY quotes the listing's own line.
+- Hub flow ("Broadcast Studio", `composer.tsx`): mission bar (streak / weekly goal / audience balance / prime-time
+  countdown; data from `lib/mission.ts` `missionStats`, client clock via `intel.ts` `nextPrime`) → Act 1 Scout
+  (Tonight's lineup = Maester's pick, smart-set strip, ask bar, filters, Deck or List) → Act 2 Craft (How/Where/Sound,
+  `phone-preview.tsx` live phone per platform, `item-editor.tsx` with controlled `tab`) → floating `.dock` with the
+  3 slots and the main button. `deck.tsx`: ←/J skip, →/K add, Backspace back. Cards cached 10 min in memory
+  (`api/card`); `api/files` streams with a pull-based ReadableStream (Readable.toWeb crashed on aborted ranges).
+- Top 5 digests (campaigns.kind 'digest' + title, migration in db.ts `COLUMNS`): one post per platform listing 2–5
+  opportunities. All items are campaign_items; posts hang on the FIRST item, which also holds the digest media
+  (`worker.ts` `renderDigest`: `card.ts` `writeDigestCard` TOP-N picture + `writeDigestSlides` cover + one story slide
+  each). Captions `caption.ts` `buildDigestCaption` (X/Telegram: one link to PathMaester /jobs or /scholarships via
+  `digestLink`; others a link per item). `SENT_ITEMS_SQL` in campaigns.ts counts every digest item as posted (postedTo,
+  mission). UI: composer format switch, `lib/digest-themes.ts` ideas (titles are promises: rules need evidence),
+  `digest-editor.tsx`, routes `api/digest` (captions) and `api/digest/card` (picture).
+- Look: `globals.css` — Studio (dark, default) / Paper (light) via `data-theme="paper"` on <html>, set before paint
+  by the inline script in `app/layout.tsx` from localStorage `sm-theme`; toggle `theme-toggle.tsx` in the rail.
+  Volt accent #d4ff3a; one colour per audience via `.a-<AUDIENCE>` (`--a`/`--a-soft`); aurora tinted by today's theme.
+
 **Commands:** `pnpm dev` (port 3011) · `pnpm typecheck` · `pnpm seed`. Launch config `social-maester`.
 
-**Current focus (2026-11-09):** reads live PathMaester jobs (720 open), posts link to PathMaester pages; 10 Mixkit
+**Current focus (2026-11-16):** opportunity hub (audience sorting, smart sets), YouTube Shorts, music catalog, Safari share fix. Not yet tested with a real YouTube account. Earlier (2026-11-09): reads live PathMaester jobs (720 open), posts link to PathMaester pages; 10 Mixkit
 tracks in data/music (credits in README). Before that (2026-11-08): "Share myself" mode added and verified (tabs/downloads stubbed in tests).
 No login on the tool yet: needed before public hosting. Earlier (2026-11-02): v1 + Connect buttons for all 6 platforms, verified in dry run and with fake
 app keys (login URLs, Meta page picker). No real account connected yet: the user must create the developer

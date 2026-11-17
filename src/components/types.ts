@@ -6,6 +6,19 @@ export type OppLite = {
   location: string | null
   deadline: string | null
   postedTo: string[]
+  /** From lib/segments.ts: who the post is for. */
+  audiences: string[]
+  primary: string
+  level: string
+  remote: boolean
+  funded: boolean
+  study: string[]
+  badges: string[]
+  /** Who may apply, read from the listing: WORLD, REGION, COUNTRY or UNKNOWN, with the phrase for "Open to: …". */
+  scope: string
+  scopeLabel: string
+  /** Whole days until the deadline (0 = today); null when there is none. */
+  daysLeft: number | null
 }
 
 export type PlatformLite = { id: string; name: string; media: "image" | "video"; captionLimit: number; usable: boolean; missing: string[]; manualOnly?: boolean }

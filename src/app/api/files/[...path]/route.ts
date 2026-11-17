@@ -1,6 +1,5 @@
 import fs from "node:fs"
 import path from "node:path"
-import { Readable } from "node:stream"
 import { dataPath } from "@/lib/db"
 
 const TYPES: Record<string, string> = {
@@ -8,6 +7,28 @@ const TYPES: Record<string, string> = {
   ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav", ".ogg": "audio/ogg",
 }
 const ALLOWED_DIRS = new Set(["music", "uploads", "media", "previews"])
+
+/** Reads only when the browser asks for more and stops cleanly when it hangs up (seeking audio/video does that
+ *  all the time). Node's stream-to-web adapter kept writing after a cancel and crashed with "Controller is already closed". */
+function fileStream(file: string, start: number, end: number): ReadableStream<Uint8Array> {
+  let fh: fs.promises.FileHandle | null = null
+  let pos = start
+  const close = async () => { const h = fh; fh = null; await h?.close() }
+  return new ReadableStream<Uint8Array>({
+    async start() { fh = await fs.promises.open(file, "r") },
+    async pull(controller) {
+      const len = Math.min(64 * 1024, end - pos + 1)
+      const h = fh
+      if (len <= 0 || !h) { await close(); controller.close(); return }
+      const buf = new Uint8Array(len)
+      const { bytesRead } = await h.read(buf, 0, len, pos)
+      if (!bytesRead) { await close(); controller.close(); return }
+      pos += bytesRead
+      controller.enqueue(buf.subarray(0, bytesRead))
+    },
+    cancel: close,
+  })
+}
 
 // Serves uploaded and rendered media from data/, with Range support so audio/video can seek.
 export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
@@ -24,11 +45,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
     const start = range[1] ? +range[1] : Math.max(0, size - +range[2])
     const end = range[1] && range[2] ? Math.min(+range[2], size - 1) : size - 1
     if (start >= size || start > end) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } })
-    const stream = Readable.toWeb(fs.createReadStream(file, { start, end })) as ReadableStream
-    return new Response(stream, { status: 206, headers: {
+    return new Response(fileStream(file, start, end), { status: 206, headers: {
       "Content-Type": type, "Accept-Ranges": "bytes", "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": String(end - start + 1),
     } })
   }
-  const stream = Readable.toWeb(fs.createReadStream(file)) as ReadableStream
-  return new Response(stream, { headers: { "Content-Type": type, "Accept-Ranges": "bytes", "Content-Length": String(size) } })
+  return new Response(fileStream(file, 0, size - 1), { headers: { "Content-Type": type, "Accept-Ranges": "bytes", "Content-Length": String(size) } })
 }

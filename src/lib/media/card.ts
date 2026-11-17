@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Resvg } from "@resvg/resvg-js"
-import { formatDeadline, moneyLine, workModeLabel } from "../caption"
+import { audienceHeadline, formatDeadline, moneyLine, placeLine } from "../caption"
 import type { Opportunity } from "../opportunities"
 
 // Post card drawn as SVG and rasterised with resvg. "feed" = 4:5 for X/Facebook/LinkedIn/Telegram,
@@ -46,7 +46,8 @@ function textBlock(lines: string[], x: number, y: number, size: number, lineHeig
 
 export function cardSvg(o: Opportunity, format: CardFormat): string {
   const [W, H] = SIZE[format]
-  const t = THEME[o.kind]
+  // The pill says who the post is for ("REMOTE JOB", "NO EXPERIENCE NEEDED", "FULLY FUNDED SCHOLARSHIP").
+  const t = { ...THEME[o.kind], label: audienceHeadline(o).text }
   const pad = 80
   const inner = W - pad * 2
   const story = format === "story"
@@ -71,7 +72,7 @@ export function cardSvg(o: Opportunity, format: CardFormat): string {
   y += (org.length - 1) * 56 + (story ? 110 : 80)
 
   const rows: [string, string | null][] = [
-    ["Location", [o.location, workModeLabel(o.workMode)].filter(Boolean).join(" · ") || null],
+    ["Location", placeLine(o) || null],
     [o.kind === "SCHOLARSHIP" ? "Award" : "Pay", moneyLine(o)],
     ["Type", o.kind === "SCHOLARSHIP" ? o.category : o.employmentType],
     ["Deadline", formatDeadline(o.deadline)],
@@ -119,4 +120,84 @@ export async function writeCard(o: Opportunity, format: CardFormat, file: string
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.writeFile(file, renderCardPng(o, format))
   return file
+}
+
+// ---------- Top 5 digest: one card listing several opportunities ----------
+
+const MIXED = { from: "#1a1238", to: "#4a2fd0", accent: "#d4ff3a", label: "TOP" }
+
+/** The colours of the kind most items share (jobs green, scholarships blue), else a neutral violet. */
+function digestTheme(opps: Opportunity[]) {
+  const jobs = opps.filter((o) => o.kind === "JOB").length
+  if (jobs === opps.length) return THEME.JOB
+  if (jobs === 0) return THEME.SCHOLARSHIP
+  return MIXED
+}
+
+export function digestCardSvg(title: string, opps: Opportunity[], format: CardFormat): string {
+  const [W, H] = SIZE[format]
+  const t = digestTheme(opps)
+  const story = format === "story"
+  const pad = 80
+  const inner = W - pad * 2
+  const brand = process.env.BRAND_NAME?.trim() || "PathMaester"
+  const parts: string[] = []
+
+  let y = story ? 300 : 150
+  const label = `TOP ${opps.length}`
+  const labelW = label.length * 28 + 64
+  parts.push(`<rect x="${pad}" y="${y - 52}" width="${labelW}" height="70" rx="35" fill="${t.accent}"/>`)
+  parts.push(`<text x="${pad + 32}" y="${y - 6}" font-size="36" font-weight="800" letter-spacing="3" fill="${t.from}">${label}</text>`)
+  y += 118
+
+  const titleSize = story ? 76 : 64
+  const head = wrap(title, titleSize, inner, 3, 0.56)
+  parts.push(textBlock(head, pad, y, titleSize, titleSize * 1.12, `font-weight="800" fill="#ffffff"`))
+  y += (head.length - 1) * titleSize * 1.12 + (story ? 90 : 64)
+
+  const footerY = H - (story ? 220 : 110)
+  const rowH = Math.min(story ? 230 : 190, (footerY - 70 - y) / opps.length)
+  const nameSize = rowH > 170 ? 38 : 34
+  opps.forEach((o, i) => {
+    const top = y + i * rowH
+    const cy = top + 30
+    parts.push(`<circle cx="${pad + 30}" cy="${cy}" r="30" fill="${t.accent}"/>`)
+    parts.push(`<text x="${pad + 30}" y="${cy + 12}" font-size="34" font-weight="800" text-anchor="middle" fill="${t.from}">${i + 1}</text>`)
+    const name = wrap(o.title, nameSize, inner - 100, rowH > 150 ? 2 : 1, 0.55)
+    parts.push(textBlock(name, pad + 90, top + 40, nameSize, nameSize * 1.15, `font-weight="700" fill="#ffffff"`))
+    const sub = [o.organization, formatDeadline(o.deadline) && `Deadline ${formatDeadline(o.deadline)}`].filter(Boolean).join(" · ")
+    const subY = top + 40 + (name.length - 1) * nameSize * 1.15 + 44
+    parts.push(textBlock(wrap(sub, 26, inner - 100, 1), pad + 90, subY, 26, 32, `font-weight="600" fill="${t.accent}" fill-opacity="0.9"`))
+    if (i < opps.length - 1) parts.push(`<line x1="${pad + 90}" y1="${top + rowH - 18}" x2="${W - pad}" y2="${top + rowH - 18}" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>`)
+  })
+
+  parts.push(`<line x1="${pad}" y1="${footerY - 50}" x2="${W - pad}" y2="${footerY - 50}" stroke="#ffffff" stroke-opacity="0.2" stroke-width="2"/>`)
+  parts.push(`<text x="${pad}" y="${footerY + 10}" font-size="40" font-weight="800" fill="#ffffff">${esc(brand)}</text>`)
+  parts.push(`<text x="${W - pad}" y="${footerY + 10}" font-size="32" font-weight="600" text-anchor="end" fill="${t.accent}">${story ? "Links: in bio" : "Links in the caption"}</text>`)
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.from}"/><stop offset="1" stop-color="${t.to}"/></linearGradient></defs>
+<rect width="${W}" height="${H}" fill="url(#bg)"/>
+<circle cx="${W - 40}" cy="60" r="280" fill="${t.accent}" fill-opacity="0.09"/>
+<circle cx="${W - 120}" cy="${H - 300}" r="200" fill="#ffffff" fill-opacity="0.04"/>
+${parts.join("\n")}
+</svg>`
+}
+
+export function renderDigestPng(title: string, opps: Opportunity[], format: CardFormat): Buffer {
+  const r = new Resvg(digestCardSvg(title, opps, format), { font: { loadSystemFonts: true, defaultFontFamily: "Arial" } })
+  return r.render().asPng()
+}
+
+export async function writeDigestCard(title: string, opps: Opportunity[], format: CardFormat, file: string): Promise<string> {
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.writeFile(file, renderDigestPng(title, opps, format))
+  return file
+}
+
+/** Video slides for a digest: the TOP-N cover, then each opportunity's own vertical card. */
+export async function writeDigestSlides(title: string, opps: Opportunity[], dir: string): Promise<string[]> {
+  const slides = [await writeDigestCard(title, opps, "story", path.join(dir, "digest-cover.png"))]
+  for (const [i, o] of opps.entries()) slides.push(await writeCard(o, "story", path.join(dir, `digest-${i + 1}.png`)))
+  return slides
 }

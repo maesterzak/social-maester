@@ -5,6 +5,7 @@ import * as meta from "./meta"
 import * as telegram from "./telegram"
 import * as tiktok from "./tiktok"
 import * as x from "./x"
+import * as youtube from "./youtube"
 
 // One entry per account to connect. Meta covers Facebook Page + Instagram with one login.
 
@@ -43,6 +44,17 @@ export const CONNECTIONS: ConnectDef[] = [
     ],
   },
   {
+    id: "youtube", name: "YouTube", covers: "YouTube Shorts", kind: "oauth",
+    appKeys: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], devUrl: "https://console.cloud.google.com/apis/credentials",
+    steps: [
+      "In Google Cloud Console create a project, then enable “YouTube Data API v3” (APIs & Services → Library).",
+      "OAuth consent screen: choose External, add your own Google account under Test users.",
+      "Credentials → Create credentials → OAuth client ID → Web application, and add the redirect URL below.",
+      "Put the Client ID and Client secret in .env as YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET.",
+      "Until Google verifies the project, videos uploaded by the app stay private; you can make them public in YouTube Studio.",
+    ],
+  },
+  {
     id: "x", name: "X (Twitter)", covers: "X posts with picture", kind: "oauth",
     appKeys: ["X_API_KEY", "X_API_SECRET"], devUrl: "https://developer.x.com/en/portal/dashboard",
     steps: [
@@ -72,7 +84,7 @@ export const CONNECTIONS: ConnectDef[] = [
   },
 ]
 
-const FLOWS = { x, meta, linkedin, tiktok } as const
+const FLOWS = { x, meta, linkedin, tiktok, youtube } as const
 
 export const connectDef = (id: string) => CONNECTIONS.find((c) => c.id === id)
 
@@ -103,6 +115,7 @@ export async function testConnection(id: ConnectionId): Promise<string> {
 export function disconnect(id: ConnectionId) {
   removeConnection(id)
   if (id === "tiktok") run("DELETE FROM kv WHERE key = 'tiktok_tokens'")
+  if (id === "youtube") run("DELETE FROM kv WHERE key = 'youtube_token'")
 }
 
 export type ConnectStatus = ConnectDef & {

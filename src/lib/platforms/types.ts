@@ -1,6 +1,6 @@
 import { setting } from "../connections"
 
-export type PlatformId = "x" | "facebook" | "linkedin" | "telegram" | "whatsapp" | "instagram" | "tiktok"
+export type PlatformId = "x" | "facebook" | "linkedin" | "telegram" | "whatsapp" | "instagram" | "tiktok" | "youtube"
 
 export type PlatformInfo = {
   id: PlatformId

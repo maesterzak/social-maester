@@ -5,7 +5,7 @@ import { all, get, kvGet, kvSet, run } from "./db"
 // (e.g. FB_PAGE_TOKEN), so `setting()` can look in connections first and fall back to .env.
 // App credentials (client id/secret) always stay in .env.
 
-export type ConnectionId = "x" | "meta" | "linkedin" | "tiktok" | "telegram"
+export type ConnectionId = "x" | "meta" | "linkedin" | "tiktok" | "youtube" | "telegram"
 export type Connection = { id: ConnectionId; account: string; data: Record<string, string>; connected_at: number; expires_at: number | null }
 
 type Row = { id: ConnectionId; account: string; data: string; connected_at: number; expires_at: number | null }

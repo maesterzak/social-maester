@@ -33,12 +33,15 @@ export function CampaignView({ initial, names }: { initial: Detail; names: Recor
 
   const reload = async () => setD(await api<Detail>(`/api/campaigns/${d.campaign.id}`))
   const manual = d.campaign.mode === "manual"
+  const digest = d.campaign.kind === "digest"
+  // A digest is one post (on its first item) listing every opportunity.
+  const items = digest ? d.items.slice(0, 1) : d.items
   const done = d.posts.filter((p) => p.status === "done").length
   return (
     <>
       <div className="page-head row" style={{ justifyContent: "space-between" }}>
         <div>
-          <h1>Campaign #{d.campaign.id} <span className={`badge ${d.campaign.status}`}>{LABEL[d.campaign.status] ?? d.campaign.status}</span></h1>
+          <h1>{digest ? "🔥 Digest" : "Campaign"} #{d.campaign.id} <span className={`badge ${d.campaign.status}`}>{LABEL[d.campaign.status] ?? d.campaign.status}</span></h1>
           <div className="muted small">
             {new Date(d.campaign.created_at).toLocaleString("en-GB")} · {manual ? "share myself" : "auto-post"} · {done}/{d.posts.length} {manual ? "shared" : "sent"}
             {d.track && <> · music: {d.track.name}</>}
@@ -49,7 +52,7 @@ export function CampaignView({ initial, names }: { initial: Detail; names: Recor
       {error && <div className="banner">{error}</div>}
 
       <div className="stack">
-        {d.items.map((item) => {
+        {items.map((item) => {
           const posts = d.posts.filter((p) => p.item_id === item.id)
           return (
             <div className="panel campaign-item" key={item.id}>
@@ -61,6 +64,7 @@ export function CampaignView({ initial, names }: { initial: Detail; names: Recor
               </div>
               <div style={{ minWidth: 0 }}>
                 <h2>{item.title}</h2>
+                {digest && <ol className="digest-list small">{d.digestTitles.map((t, i) => <li key={i}>{t}</li>)}</ol>}
                 {manual && !item.error && <ShareKit item={item} posts={posts} names={names} reload={reload} />}
                 {item.error && <div className="error">{item.error}</div>}
                 {(!manual || item.error) && <table>

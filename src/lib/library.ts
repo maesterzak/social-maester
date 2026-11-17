@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { all, dataPath, get, run } from "./db"
 import { probeDuration } from "./media/ffmpeg"
+import { CATALOG } from "./catalog"
 
 // Background music tracks and extra pictures the user uploads. Files live under data/, rows in SQLite.
 
@@ -56,3 +57,33 @@ export async function addUpload(f: File): Promise<Upload> {
 }
 
 export const getUpload = (id: number) => get<Upload>("SELECT id, file, original_name FROM uploads WHERE id = ?", id)
+
+// ---- Free catalog (Mixkit): preview in the browser, download into data/music on request ----
+export const catalogStatus = () => {
+  const have = new Set(listTracks().map((t) => t.name))
+  return CATALOG.map((t) => ({ ...t, inLibrary: have.has(t.name) }))
+}
+
+// Downloads the given catalog keys (all missing ones when omitted) and adds them to the library.
+export async function addCatalogTracks(keys?: string[]): Promise<{ added: string[]; failed: string[] }> {
+  const have = new Set(listTracks().map((t) => t.name))
+  const todo = CATALOG.filter((t) => (!keys || keys.includes(t.key)) && !have.has(t.name))
+  const added: string[] = []
+  const failed: string[] = []
+  for (const t of todo) {
+    try {
+      const res = await fetch(t.url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const rel = path.posix.join("music", `${t.key}.mp3`)
+      await fs.mkdir(dataPath("music"), { recursive: true })
+      await fs.writeFile(dataPath(rel), Buffer.from(await res.arrayBuffer()))
+      let duration: number
+      try { duration = await probeDuration(dataPath(rel)) } catch (e) { await fs.rm(dataPath(rel), { force: true }); throw e }
+      run("INSERT INTO music(name, file, duration, created_at) VALUES(?,?,?,?)", t.name, rel, duration, Date.now())
+      added.push(t.name)
+    } catch {
+      failed.push(t.name)
+    }
+  }
+  return { added, failed }
+}
