@@ -173,3 +173,25 @@ export function markPost(postId: number, shared: boolean): number {
   run("UPDATE campaigns SET status = ?, finished_at = ? WHERE id = ?", left ? "ready" : "done", left ? null : Date.now(), p.campaign_id)
   return p.campaign_id
 }
+
+/** What the public /bio page lists: opportunities from campaigns shared or posted in the last `days` days, newest
+ *  first. Dry runs don't count; a digest stays together under its title. */
+export function recentlyShared(days = 45): { campaignId: number; kind: "single" | "digest"; title: string | null; createdAt: number; ids: string[] }[] {
+  const rows = all<{ campaign_id: number; kind: "single" | "digest"; title: string | null; created_at: number; opportunity_id: string }>(`
+    SELECT c.id AS campaign_id, c.kind, c.title, c.created_at, i.opportunity_id
+    FROM campaigns c JOIN campaign_items i ON i.campaign_id = c.id
+    WHERE c.created_at >= ? AND EXISTS (
+      SELECT 1 FROM posts p JOIN campaign_items pi ON pi.id = p.item_id
+      WHERE pi.campaign_id = c.id AND p.status IN ('ready', 'done') AND p.dry_run = 0)
+    ORDER BY c.created_at DESC, i.id`, Date.now() - days * 86_400_000)
+  const groups = new Map<number, { campaignId: number; kind: "single" | "digest"; title: string | null; createdAt: number; ids: string[] }>()
+  const seen = new Set<string>()
+  for (const r of rows) {
+    if (seen.has(r.opportunity_id)) continue
+    seen.add(r.opportunity_id)
+    const g = groups.get(r.campaign_id) ?? { campaignId: r.campaign_id, kind: r.kind, title: r.title, createdAt: r.created_at, ids: [] }
+    g.ids.push(r.opportunity_id)
+    groups.set(r.campaign_id, g)
+  }
+  return [...groups.values()]
+}

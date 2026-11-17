@@ -20,6 +20,19 @@ export function linkFor(o: Opportunity, platform?: string): string | null {
 }
 export const shareLink = linkFor
 
+/** What viewers type into the search box on the bio link (PathMaester and the /bio page both search titles). */
+export const searchTerm = (title: string) => {
+  const t = title.replace(/\s*[([].*$/, "").trim() || title
+  return t.length <= 45 ? t : t.split(/\s+/).slice(0, 5).join(" ")
+}
+/** "pathmaester.com": readable, for platforms where a full link can't be tapped anyway. */
+const siteName = () => {
+  const pm = pathmaesterUrl()
+  try { return pm ? new URL(pm).hostname.replace(/^www\./, "") : null } catch { return null }
+}
+/** TikTok, Instagram and YouTube Shorts: captions can't hold a tappable link, so point at the profile link. */
+const bioLine = (find: string) => [`🔗 Apply: tap the link in our bio, then search ${find}`, siteName() && `🌐 ${siteName()}`].filter(Boolean).join("\n")
+
 /** Cut long text at a word boundary. */
 function clip(s: string, max: number) {
   if (s.length <= max) return s
@@ -98,7 +111,8 @@ export function buildCaption(o: Opportunity, p: PlatformInfo): string {
     clip(o.summary ?? "", 400),
   ]
   if (o.eligibility.length) lines.push("", "✅ Who can apply:", ...o.eligibility.slice(0, 4).map((e) => `• ${clip(e, 120)}`))
-  if (link) lines.push("", p.linksDead ? `👉 Apply: link in bio\n${link}` : `👉 Apply: ${link}`)
+  if (p.linksDead) lines.push("", bioLine(`“${searchTerm(o.title)}”`))
+  else if (link) lines.push("", `👉 Apply: ${link}`)
   lines.push("", hashtags(o, p.linksDead ? 8 : 5, p.id === "youtube" ? ["Shorts"] : []))
 
   let text = lines.filter((l) => typeof l === "string").join("\n").replace(/\n{3,}/g, "\n\n").trim()
@@ -166,7 +180,7 @@ export function buildDigestCaption(title: string, opps: Opportunity[], p: Platfo
     ].filter(Boolean).join("\n")
   })
   const footer = p.linksDead
-    ? [`👉 Apply: link in bio${one ? `\n${one}` : ""}`, "", digestTags(opps, 8, p.id === "youtube" ? ["Shorts"] : [])]
+    ? [bioLine("any title above"), "", digestTags(opps, 8, p.id === "youtube" ? ["Shorts"] : [])]
     : ["Save this post and share it with someone who needs it. 🙌", "", digestTags(opps, 5)]
   let text = [head, "", ...blocks.flatMap((b) => [b, ""]), ...footer].join("\n").replace(/\n{3,}/g, "\n\n").trim()
   if ([...text].length > p.captionLimit) text = [...text].slice(0, p.captionLimit - 1).join("") + "…"

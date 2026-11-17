@@ -10,7 +10,7 @@ const ACTIVE = new Set(["queued", "running"])
 const LABEL: Record<string, string> = { queued: "waiting", rendering: "making media", posting: "posting", ready: "ready to share", done: "sent", failed: "failed" }
 
 // Live progress of one campaign; polls while anything is still queued or running.
-export function CampaignView({ initial, names }: { initial: Detail; names: Record<string, string> }) {
+export function CampaignView({ initial, names, bio }: { initial: Detail; names: Record<string, string>; bio: Record<string, string> }) {
   const [d, setD] = useState(initial)
   const [error, setError] = useState("")
   const active = ACTIVE.has(d.campaign.status) || d.posts.some((p) => ["queued", "rendering", "posting"].includes(p.status))
@@ -65,7 +65,7 @@ export function CampaignView({ initial, names }: { initial: Detail; names: Recor
               <div style={{ minWidth: 0 }}>
                 <h2>{item.title}</h2>
                 {digest && <ol className="digest-list small">{d.digestTitles.map((t, i) => <li key={i}>{t}</li>)}</ol>}
-                {manual && !item.error && <ShareKit item={item} posts={posts} names={names} reload={reload} />}
+                {manual && !item.error && <ShareKit item={item} posts={posts} names={names} reload={reload} bio={bio} />}
                 {item.error && <div className="error">{item.error}</div>}
                 {(!manual || item.error) && <table>
                   <tbody>

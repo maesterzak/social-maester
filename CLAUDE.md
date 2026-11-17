@@ -60,6 +60,12 @@ Credentials only in `.env`; `DRY_RUN=1` makes media but sends nothing.
   `digestLink`; others a link per item). `SENT_ITEMS_SQL` in campaigns.ts counts every digest item as posted (postedTo,
   mission). UI: composer format switch, `lib/digest-themes.ts` ideas (titles are promises: rules need evidence),
   `digest-editor.tsx`, routes `api/digest` (captions) and `api/digest/card` (picture).
+- Link in bio (TikTok, Instagram Reels, YouTube Shorts can't make caption links tappable; only the profile link is):
+  `lib/bio.ts` `bioLink()` = saved kv `bio_url` / BIO_URL → else `${APP_URL}/bio` when https → else PathMaester home
+  (its /jobs has `?q=` search). Captions on linksDead platforms say "tap the link in our bio, then search “<searchTerm>”"
+  (`caption.ts` `bioLine`). Public `app/bio/page.tsx` + `components/bio-list.tsx` lists `recentlyShared()` campaigns
+  (ready/done, not dry run, still open) with Apply buttons; `?from=` sets utm_source, `?q=` pre-fills search.
+  Accounts page `bio-card.tsx` (+ `api/bio`); share kit shows a "Copy bio link" reminder on video platforms.
 - Look: `globals.css` — Studio (dark, default) / Paper (light) via `data-theme="paper"` on <html>, set before paint
   by the inline script in `app/layout.tsx` from localStorage `sm-theme`; toggle `theme-toggle.tsx` in the rail.
   Volt accent #d4ff3a; one colour per audience via `.a-<AUDIENCE>` (`--a`/`--a-soft`); aurora tinted by today's theme.

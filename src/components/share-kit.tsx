@@ -10,6 +10,8 @@ type Props = {
   posts: Post[]
   names: Record<string, string>
   reload: () => Promise<void>
+  /** Profile ("link in bio") address per platform where caption links can't be tapped (TikTok, Instagram, YouTube). */
+  bio?: Record<string, string>
 }
 
 function download(url: string, name: string) {
@@ -45,7 +47,7 @@ function legacyCopy(text: string): boolean {
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50)
 
 // "Share myself": opens each platform with the post prepared; the user attaches the media and clicks Post.
-export function ShareKit({ item, posts, names, reload }: Props) {
+export function ShareKit({ item, posts, names, reload, bio = {} }: Props) {
   // Several messages can come from one click (copy result + blocked tabs), so keep a list.
   const [notes, setNotes] = useState<{ ok: boolean; text: string }[]>([])
   // Platforms the browser wouldn't open in the same click (Safari allows one tab per click): one "Open next" click each.
@@ -163,6 +165,12 @@ export function ShareKit({ item, posts, names, reload }: Props) {
               </td>
               <td className="small">
                 {t.hint}
+                {bio[p.platform] && (
+                  <div className="bio-remind">
+                    🔗 Links in this caption can&apos;t be tapped. Make sure your {names[p.platform] ?? p.platform} profile link is <code>{bio[p.platform].replace(/^https?:\/\//, "").slice(0, 38)}{bio[p.platform].length > 46 ? "…" : ""}</code>
+                    <button type="button" className="link small" style={{ marginLeft: 6 }} onClick={() => { setNotes([]); void copyText(bio[p.platform], `${names[p.platform]} bio link`) }}>Copy bio link</button>
+                  </div>
+                )}
                 <details>
                   <summary className="muted small" style={{ cursor: "pointer", marginTop: 4 }}>Caption</summary>
                   <pre className="caption">{p.caption}</pre>

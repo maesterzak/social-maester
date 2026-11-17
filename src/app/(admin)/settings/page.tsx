@@ -1,5 +1,7 @@
 import { connection } from "next/server"
 import { AccountCard } from "@/components/account-card"
+import { BioCard } from "@/components/bio-card"
+import { BIO_PLATFORMS, bioLink, bioLinkFor, bioPageUrl } from "@/lib/bio"
 import { connectStatuses, metaFlow } from "@/lib/connect"
 import { appUrl } from "@/lib/connections"
 import { ffmpegBin, ffmpegVersion } from "@/lib/media/ffmpeg"
@@ -30,6 +32,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {sp.error && <div className="banner bad-banner">{sp.error}</div>}
 
       <div className="stack">
+        <BioCard link={bioLink()} perPlatform={Object.fromEntries(BIO_PLATFORMS.map((p) => [p, bioLinkFor(p)]))} pageReady={!!bioPageUrl()} />
+
         <div className="panel stack" style={{ gap: 8 }}>
           <h2>System</h2>
           <div className="row"><b style={{ width: 120 }}>Dry run</b>{isDryRun()

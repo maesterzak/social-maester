@@ -434,3 +434,25 @@ tr.shared-row td { opacity: 0.5; }
 .digest-order button.small { padding: 2px 8px; }
 .digest-list { margin: -4px 0 12px; padding-left: 20px; color: var(--muted); }
 @media (max-width: 640px) { .format-switch { grid-template-columns: 1fr; } }
+
+/* ---------- public link-in-bio page (/bio), made for phones ---------- */
+.bio-page { max-width: 560px; margin: 0 auto; padding: 32px 16px 60px; display: flex; flex-direction: column; gap: 14px; }
+.bio-head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
+.bio-head h1 { font-size: 30px; margin: 8px 0 0; }
+.bio-head p { margin: 0; }
+.brand-mark.big { width: 56px; height: 56px; border-radius: 16px; }
+.brand-mark.big::after { width: 22px; height: 22px; background: var(--bg); }
+.bio-search { font-size: 16px !important; padding: 13px 16px !important; border-radius: 14px !important; }
+.bio-group { display: flex; flex-direction: column; gap: 10px; }
+.bio-group.digest { padding: 12px; border-radius: 18px; border: 1px solid var(--border); background: var(--panel-2); }
+.bio-group h2 { font-size: 17px; margin: 2px 4px 0; }
+.bio-item { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--job); color: var(--text); text-decoration: none; transition: transform 0.12s ease, border-color 0.12s ease; }
+.bio-item.sch { border-left-color: var(--sch); }
+.bio-item:hover, .bio-item:focus-visible { transform: translateY(-2px); border-color: var(--accent); }
+.bio-item b { font-size: 16px; line-height: 1.3; }
+.bio-kind { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.bio-apply { align-self: flex-start; margin-top: 6px; background: var(--accent); color: var(--accent-text); font-weight: 700; padding: 7px 14px; border-radius: 10px; }
+.bio-more { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.bio-more a { color: var(--text); }
+.bio-remind { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--text); }
+.bio-remind code { background: transparent; padding: 0; }
