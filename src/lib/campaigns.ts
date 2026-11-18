@@ -11,8 +11,9 @@ export const MAX_PER_DIGEST = 5
 const platformIds = ["x", "facebook", "linkedin", "telegram", "whatsapp", "instagram", "tiktok", "youtube"] as const
 
 export const CampaignInput = z.object({
-  /** auto = post through the APIs; manual = make the media, then the user shares from prepared tabs. */
-  mode: z.enum(["auto", "manual"]).default("auto"),
+  /** auto = post through the APIs; manual = make the media, then the user shares from prepared tabs;
+   *  smart = auto where an account is connected, manual for the rest. */
+  mode: z.enum(["auto", "manual", "smart"]).default("auto"),
   platforms: z.array(z.enum(platformIds)).min(1, "Pick at least one platform"),
   items: z.array(z.object({
     opportunityId: z.string().min(1),
@@ -33,6 +34,7 @@ export type CampaignInput = z.infer<typeof CampaignInput>
 export type Post = {
   id: number; item_id: number; opportunity_id: string; platform: PlatformId; caption: string; status: string
   external_id: string | null; url: string | null; error: string | null; dry_run: number; updated_at: number
+  delivery: "auto" | "manual"
 }
 export type Item = {
   id: number; campaign_id: number; opportunity_id: string; title: string; extra_upload_ids: string
@@ -40,9 +42,16 @@ export type Item = {
 }
 export type Campaign = {
   id: number; status: string; music_id: number | null; music_start: number; music_volume: number
-  slide_seconds: number; created_at: number; finished_at: number | null; mode: "auto" | "manual"
+  slide_seconds: number; created_at: number; finished_at: number | null; mode: "auto" | "manual" | "smart"
   kind: "single" | "digest"; title: string | null
 }
+
+/** True when the user shares this post by hand: every post of a "share myself" campaign, and in a smart campaign
+ *  the platforms that had no connected account when it was made. */
+export const isManualPost = (mode: string, p: { delivery?: string }) => mode === "manual" || p.delivery === "manual"
+
+/** Platforms with a working connection (keys or a connected account); WhatsApp has no API so never counts. */
+export const connectedPlatforms = () => new Set(platformStatuses().filter((p) => !p.manualOnly && p.missing.length === 0).map((p) => p.id))
 
 export async function createCampaign(input: CampaignInput): Promise<number> {
   const usable = new Map(platformStatuses().map((p) => [p.id, p]))
@@ -69,7 +78,10 @@ export async function createCampaign(input: CampaignInput): Promise<number> {
 
   const d = db()
   const now = Date.now()
-  const dry = input.mode === "auto" && isDryRun() ? 1 : 0
+  const connected = connectedPlatforms()
+  const deliveryFor = (p: PlatformId): "auto" | "manual" => input.mode === "manual" ? "manual" : input.mode === "auto" || connected.has(p) ? "auto" : "manual"
+  // Dry run only applies to what the app would really send; things you share yourself are never dry.
+  const dryFor = (p: PlatformId) => (deliveryFor(p) === "auto" && isDryRun() ? 1 : 0)
   d.exec("BEGIN")
   try {
     const c = run("INSERT INTO campaigns(status, mode, music_id, music_start, music_volume, slide_seconds, created_at, kind, title) VALUES('queued',?,?,?,?,?,?,?,?)",
@@ -82,8 +94,8 @@ export async function createCampaign(input: CampaignInput): Promise<number> {
       // A digest is posted once per platform, from its first item (which also holds the digest's picture and video).
       if (digest && n > 0) continue
       for (const p of input.platforms) {
-        run("INSERT INTO posts(item_id, opportunity_id, platform, caption, status, dry_run, updated_at) VALUES(?,?,?,?, 'queued', ?, ?)",
-          Number(item.lastInsertRowid), o.id, p, (digest ? digest.captions[p] : it.captions[p]).trim(), dry, now)
+        run("INSERT INTO posts(item_id, opportunity_id, platform, caption, status, dry_run, updated_at, delivery) VALUES(?,?,?,?, 'queued', ?, ?, ?)",
+          Number(item.lastInsertRowid), o.id, p, (digest ? digest.captions[p] : it.captions[p]).trim(), dryFor(p), now, deliveryFor(p))
       }
     }
     d.exec("COMMIT")
@@ -151,26 +163,28 @@ export function postedTo(): Map<string, string[]> {
 
 /** Put a failed post back in the queue; its campaign is picked up again by the worker. */
 export function retryPost(postId: number): number {
-  const p = get<Post & { campaign_id: number }>(
-    "SELECT p.*, i.campaign_id FROM posts p JOIN campaign_items i ON i.id = p.item_id WHERE p.id = ?", postId)
+  const p = get<Post & { campaign_id: number; mode: string }>(
+    "SELECT p.*, i.campaign_id, c.mode FROM posts p JOIN campaign_items i ON i.id = p.item_id JOIN campaigns c ON c.id = i.campaign_id WHERE p.id = ?", postId)
   if (!p) throw new Error("Post not found")
   if (p.status !== "failed") throw new Error("Only failed posts can be retried")
-  run("UPDATE posts SET status = 'queued', error = NULL, dry_run = ?, updated_at = ? WHERE id = ?", isDryRun() ? 1 : 0, Date.now(), postId)
+  run("UPDATE posts SET status = 'queued', error = NULL, dry_run = ?, updated_at = ? WHERE id = ?", !isManualPost(p.mode, p) && isDryRun() ? 1 : 0, Date.now(), postId)
   run("UPDATE campaigns SET status = 'queued', finished_at = NULL WHERE id = ?", p.campaign_id)
   return p.campaign_id
 }
 
-/** Manual mode: the user says whether they shared a post. Campaign is done once every post is. */
+/** The user says whether they shared a post (manual campaigns, and the by-hand part of smart ones). The campaign is
+ *  done once every post is. */
 export function markPost(postId: number, shared: boolean): number {
   const p = get<Post & { campaign_id: number; mode: string }>(
     "SELECT p.*, i.campaign_id, c.mode FROM posts p JOIN campaign_items i ON i.id = p.item_id JOIN campaigns c ON c.id = i.campaign_id WHERE p.id = ?", postId)
   if (!p) throw new Error("Post not found")
-  if (p.mode !== "manual") throw new Error("Only manually shared posts can be marked")
+  if (!isManualPost(p.mode, p)) throw new Error("Only posts you share yourself can be marked")
   if (!["ready", "done"].includes(p.status)) throw new Error("The picture/video isn't ready yet")
   run("UPDATE posts SET status = ?, updated_at = ? WHERE id = ?", shared ? "done" : "ready", Date.now(), postId)
-  const left = get<{ n: number }>(
-    "SELECT count(*) AS n FROM posts p JOIN campaign_items i ON i.id = p.item_id WHERE i.campaign_id = ? AND p.status != 'done'", p.campaign_id)!.n
-  run("UPDATE campaigns SET status = ?, finished_at = ? WHERE id = ?", left ? "ready" : "done", left ? null : Date.now(), p.campaign_id)
+  const counts = get<{ left: number; failed: number }>(
+    "SELECT sum(p.status != 'done') AS left, sum(p.status = 'failed') AS failed FROM posts p JOIN campaign_items i ON i.id = p.item_id WHERE i.campaign_id = ?", p.campaign_id)!
+  const status = !counts.left ? "done" : p.mode === "smart" && counts.failed ? "partial" : "ready"
+  run("UPDATE campaigns SET status = ?, finished_at = ? WHERE id = ?", status, status === "done" ? Date.now() : null, p.campaign_id)
   return p.campaign_id
 }
 

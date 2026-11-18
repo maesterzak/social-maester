@@ -1,6 +1,6 @@
 import fs from "node:fs"
 import { all, dataPath, run } from "./db"
-import { campaignItems, campaignPosts, getCampaign, type Item } from "./campaigns"
+import { campaignItems, campaignPosts, getCampaign, isManualPost, type Item } from "./campaigns"
 import { getTrack, getUpload } from "./library"
 import { getOpportunities, getOpportunity } from "./opportunities"
 import { writeCard, writeDigestCard, writeDigestSlides } from "./media/card"
@@ -98,8 +98,10 @@ async function processCampaign(id: number) {
   for (const item of allItems) {
     const queued = posts.filter((p) => p.item_id === item.id && p.status === "queued")
     if (!queued.length) continue
-    // Manual sharing always gets the picture too (handy to paste anywhere).
-    const needImage = c.mode === "manual" || queued.some((p) => platformInfo(p.platform)?.media === "image")
+    // Posts the user shares by hand always get the picture too (handy to paste anywhere).
+    const manualPosts = queued.filter((p) => isManualPost(c.mode, p))
+    const autoPosts = queued.filter((p) => !isManualPost(c.mode, p))
+    const needImage = manualPosts.length > 0 || queued.some((p) => platformInfo(p.platform)?.media === "image")
     const needVideo = queued.some((p) => platformInfo(p.platform)?.media === "video")
 
     for (const p of queued) run("UPDATE posts SET status = 'rendering', updated_at = ? WHERE id = ?", Date.now(), p.id)
@@ -114,13 +116,10 @@ async function processCampaign(id: number) {
       continue
     }
 
-    if (c.mode === "manual") {
-      // Nothing is sent: the user shares from the prepared tabs and marks each post done.
-      for (const p of queued) run("UPDATE posts SET status = 'ready', updated_at = ? WHERE id = ?", Date.now(), p.id)
-      continue
-    }
+    // Posts the user shares: nothing is sent, they open the prepared tabs and mark each one done.
+    for (const p of manualPosts) run("UPDATE posts SET status = 'ready', updated_at = ? WHERE id = ?", Date.now(), p.id)
 
-    for (const p of queued) {
+    for (const p of autoPosts) {
       const info = platformInfo(p.platform)!
       const file = info.media === "video" ? item.video_file : item.image_file
       run("UPDATE posts SET status = 'posting', updated_at = ? WHERE id = ?", Date.now(), p.id)
@@ -149,6 +148,13 @@ async function processCampaign(id: number) {
   const failed = after.filter((p) => p.status === "failed").length
   if (c.mode === "manual") {
     run("UPDATE campaigns SET status = ? WHERE id = ?", failed ? "failed" : "ready", id)
+    return
+  }
+  if (c.mode === "smart") {
+    // Sent automatically where connected; "ready" = still waiting for the user to share the rest.
+    const ready = after.filter((p) => p.status === "ready").length
+    const status = failed === after.length ? "failed" : failed ? "partial" : ready ? "ready" : "done"
+    run("UPDATE campaigns SET status = ?, finished_at = ? WHERE id = ?", status, status === "ready" ? null : Date.now(), id)
     return
   }
   const status = failed === 0 ? "done" : failed === after.length ? "failed" : "partial"

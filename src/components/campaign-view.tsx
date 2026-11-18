@@ -32,7 +32,9 @@ export function CampaignView({ initial, names, bio }: { initial: Detail; names: 
   }
 
   const reload = async () => setD(await api<Detail>(`/api/campaigns/${d.campaign.id}`))
-  const manual = d.campaign.mode === "manual"
+  const mode = d.campaign.mode
+  // By hand: every post of a "share myself" campaign, and in a smart one the platforms with no connected account.
+  const byHand = (p: Detail["posts"][number]) => mode === "manual" || p.delivery === "manual"
   const digest = d.campaign.kind === "digest"
   // A digest is one post (on its first item) listing every opportunity.
   const items = digest ? d.items.slice(0, 1) : d.items
@@ -43,7 +45,7 @@ export function CampaignView({ initial, names, bio }: { initial: Detail; names: 
         <div>
           <h1>{digest ? "🔥 Digest" : "Campaign"} #{d.campaign.id} <span className={`badge ${d.campaign.status}`}>{LABEL[d.campaign.status] ?? d.campaign.status}</span></h1>
           <div className="muted small">
-            {new Date(d.campaign.created_at).toLocaleString("en-GB")} · {manual ? "share myself" : "auto-post"} · {done}/{d.posts.length} {manual ? "shared" : "sent"}
+            {new Date(d.campaign.created_at).toLocaleString("en-GB")} · {mode === "manual" ? "share myself" : mode === "smart" ? "smart: auto + share" : "auto-post"} · {done}/{d.posts.length} done
             {d.track && <> · music: {d.track.name}</>}
           </div>
         </div>
@@ -54,6 +56,10 @@ export function CampaignView({ initial, names, bio }: { initial: Detail; names: 
       <div className="stack">
         {items.map((item) => {
           const posts = d.posts.filter((p) => p.item_id === item.id)
+          const handPosts = posts.filter(byHand)
+          const autoPosts = posts.filter((p) => !byHand(p))
+          // If the picture/video couldn't be made, show every post's status so the error is next to what failed.
+          const tablePosts = item.error ? posts : autoPosts
           return (
             <div className="panel campaign-item" key={item.id}>
               <div className="stack" style={{ gap: 8 }}>
@@ -65,11 +71,11 @@ export function CampaignView({ initial, names, bio }: { initial: Detail; names: 
               <div style={{ minWidth: 0 }}>
                 <h2>{item.title}</h2>
                 {digest && <ol className="digest-list small">{d.digestTitles.map((t, i) => <li key={i}>{t}</li>)}</ol>}
-                {manual && !item.error && <ShareKit item={item} posts={posts} names={names} reload={reload} bio={bio} />}
                 {item.error && <div className="error">{item.error}</div>}
-                {(!manual || item.error) && <table>
+                {tablePosts.length > 0 && mode === "smart" && !item.error && <div className="section-label">⚡ Sent automatically</div>}
+                {tablePosts.length > 0 && <table>
                   <tbody>
-                    {posts.map((p) => (
+                    {tablePosts.map((p) => (
                       <tr key={p.id}>
                         <td style={{ width: 150 }}><b>{names[p.platform] ?? p.platform}</b></td>
                         <td>
@@ -89,6 +95,12 @@ export function CampaignView({ initial, names, bio }: { initial: Detail; names: 
                     ))}
                   </tbody>
                 </table>}
+                {handPosts.length > 0 && !item.error && (
+                  <>
+                    {mode === "smart" && <div className="section-label" style={{ marginTop: 14 }}>✋ You share these ({handPosts.length})</div>}
+                    <ShareKit item={item} posts={handPosts} names={names} reload={reload} bio={bio} />
+                  </>
+                )}
               </div>
             </div>
           )

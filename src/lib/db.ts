@@ -128,6 +128,8 @@ const COLUMNS: [table: string, column: string, ddl: string][] = [
   // single = one post per opportunity; digest = one post listing all of the campaign's opportunities (Top 5)
   ["campaigns", "kind", "TEXT NOT NULL DEFAULT 'single'"],
   ["campaigns", "title", "TEXT"],
+  // auto = the app sends it through the platform's API; manual = the user shares it (smart campaigns decide per platform)
+  ["posts", "delivery", "TEXT NOT NULL DEFAULT 'auto'"],
 ]
 
 function migrate(d: DatabaseSync) {

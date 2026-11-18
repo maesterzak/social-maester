@@ -66,6 +66,13 @@ Credentials only in `.env`; `DRY_RUN=1` makes media but sends nothing.
   (`caption.ts` `bioLine`). Public `app/bio/page.tsx` + `components/bio-list.tsx` lists `recentlyShared()` campaigns
   (ready/done, not dry run, still open) with Apply buttons; `?from=` sets utm_source, `?q=` pre-fills search.
   Accounts page `bio-card.tsx` (+ `api/bio`); share kit shows a "Copy bio link" reminder on video platforms.
+- Smart mode (campaigns.mode 'smart', the Hub default when any account is connected): per post `posts.delivery` is
+  'auto' (platform has a working connection: `campaigns.ts` `connectedPlatforms()` = keys present, not manualOnly) or
+  'manual' (you share it). `isManualPost(mode, post)` decides everywhere: worker renders once, marks manual posts 'ready'
+  and sends the auto ones; `markPost` only accepts manual ones; dry-run only applies to auto posts. Campaign status for
+  smart: failed/partial/ready (still waiting for you)/done. Adding keys for a platform makes it automatic in the next
+  campaign with no code change. UI: composer "How" tabs (Smart / Share myself / Auto only) and `⚡ auto` / `✋ you share`
+  tags; `campaign-view.tsx` shows "Sent automatically" (status table) then "You share these" (ShareKit).
 - Look: `globals.css` — Studio (dark, default) / Paper (light) via `data-theme="paper"` on <html>, set before paint
   by the inline script in `app/layout.tsx` from localStorage `sm-theme`; toggle `theme-toggle.tsx` in the rail.
   Volt accent #d4ff3a; one colour per audience via `.a-<AUDIENCE>` (`--a`/`--a-soft`); aurora tinted by today's theme.

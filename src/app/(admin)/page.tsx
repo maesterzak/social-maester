@@ -35,7 +35,7 @@ export default async function Home() {
   const brand = process.env.BRAND_NAME?.trim() || "PathMaester"
   const theme = audienceInfo(WEEK_THEMES[now.getDay()])
   const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening"
-  const platforms = platformStatuses().map(({ id, name, media, captionLimit, usable, missing, manualOnly }) => ({ id, name, media, captionLimit, usable, missing, manualOnly: !!manualOnly }))
+  const platforms = platformStatuses().map(({ id, name, media, captionLimit, usable, missing, manualOnly }) => ({ id, name, media, captionLimit, usable, missing, manualOnly: !!manualOnly, connected: !manualOnly && missing.length === 0 }))
 
   return (
     <>

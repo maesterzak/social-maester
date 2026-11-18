@@ -21,7 +21,7 @@ export type OppLite = {
   daysLeft: number | null
 }
 
-export type PlatformLite = { id: string; name: string; media: "image" | "video"; captionLimit: number; usable: boolean; missing: string[]; manualOnly?: boolean }
+export type PlatformLite = { id: string; name: string; media: "image" | "video"; captionLimit: number; usable: boolean; missing: string[]; manualOnly?: boolean; /** Has a working connection, so a smart post goes out by itself. */ connected: boolean }
 export type TrackLite = { id: number; name: string; file: string; duration: number }
 export type Pic = { id: number; name: string; url: string }
 export type MusicChoice = { id: number; start: number; volume: number } | null

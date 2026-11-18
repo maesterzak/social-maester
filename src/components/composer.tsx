@@ -86,8 +86,9 @@ export function Composer({ opportunities, platforms, tracks: initialTracks, max,
   const [musicTouched, setMusicTouched] = useState(false)
   const [q, setQ] = useState("")
   const [selected, setSelected] = useState<string[]>([])
-  // manual = make the media and open prepared tabs; auto = post through the connected APIs
-  const [mode, setMode] = useState<"manual" | "auto">("manual")
+  // smart = post by itself where an account is connected and prepare the rest for sharing; manual = make the media and
+  // open prepared tabs; auto = post through the connected APIs only
+  const [mode, setMode] = useState<"smart" | "manual" | "auto">(() => (platforms.some((p) => p.connected) ? "smart" : "manual"))
   const [chosen, setChosen] = useState<string[]>(() => platforms.map((p) => p.id))
   const [defaults, setDefaults] = useState<Captions>({})
   const [captions, setCaptions] = useState<Captions>({})
@@ -146,7 +147,7 @@ export function Composer({ opportunities, platforms, tracks: initialTracks, max,
   const order = [theme, ...AUDIENCES.map((a) => a.id).filter((a) => a !== theme)]
   const underserved = order.reduce((best, a) => ((mission.byAudience[a] ?? 0) < (mission.byAudience[best] ?? 0) ? a : best), order[0]) as Audience
 
-  const available = (p: PlatformLite) => mode === "manual" || p.usable
+  const available = (p: PlatformLite) => mode !== "auto" || p.usable
   const chosenPlatforms = platforms.filter((p) => chosen.includes(p.id) && available(p))
   const wantsVideo = chosenPlatforms.some((p) => p.media === "video")
 
@@ -298,6 +299,12 @@ export function Composer({ opportunities, platforms, tracks: initialTracks, max,
     }
   }
 
+  // What happens to each ticked platform: smart posts connected ones by itself and prepares the rest.
+  const goesAuto = (p: PlatformLite) => mode === "auto" || (mode === "smart" && p.connected)
+  const autoN = chosenPlatforms.filter(goesAuto).length
+  const shareN = chosenPlatforms.length - autoN
+  const autoNames = chosenPlatforms.filter(goesAuto).map((p) => PLATFORM_SHORT[p.id] ?? p.name).join(", ")
+  const goLabel = autoN && shareN ? `Post to ${autoNames} + prepare ${shareN} →` : autoN ? "Post now →" : "Prepare to share →"
   const prime = clock ? nextPrime(chosenPlatforms.map((p) => p.id), clock) : null
   const goalPct = Math.min(100, Math.round((mission.weekItems / mission.goal) * 100))
   const maxAud = Math.max(1, ...AUDIENCES.map((a) => mission.byAudience[a.id] ?? 0))
@@ -561,11 +568,16 @@ export function Composer({ opportunities, platforms, tracks: initialTracks, max,
               <div>
                 <h3>How</h3>
                 <div className="tabs mode-tabs" role="tablist">
-                  <button type="button" className={mode === "manual" ? "on" : ""} onClick={() => setMode("manual")}>Share myself</button>
-                  <button type="button" className={mode === "auto" ? "on" : ""} onClick={() => setMode("auto")}>Auto-post</button>
+                  <button type="button" role="tab" aria-selected={mode === "smart"} className={mode === "smart" ? "on" : ""} onClick={() => setMode("smart")}>⚡ Smart</button>
+                  <button type="button" role="tab" aria-selected={mode === "manual"} className={mode === "manual" ? "on" : ""} onClick={() => setMode("manual")}>Share myself</button>
+                  <button type="button" role="tab" aria-selected={mode === "auto"} className={mode === "auto" ? "on" : ""} onClick={() => setMode("auto")}>Auto only</button>
                 </div>
                 <div className="muted small" style={{ marginTop: 6 }}>
-                  {mode === "manual" ? "Each platform opens with the post ready; you click Post." : "Sent through your connected accounts, no clicks."}
+                  {mode === "smart"
+                    ? (autoN > 0
+                      ? `Posts by itself to ${autoNames}. The other ${shareN} are prepared for you to share. Add keys for more platforms in Accounts and they join the automatic ones.`
+                      : "No account is connected yet, so everything is prepared for you to share. Connect accounts in Accounts and they post by themselves.")
+                    : mode === "manual" ? "Each platform opens with the post ready; you click Post." : "Sent through your connected accounts only, no clicks."}
                 </div>
               </div>
               <div>
@@ -579,13 +591,14 @@ export function Composer({ opportunities, platforms, tracks: initialTracks, max,
                           title={available(p) ? (BEST_TIMES[p.id] ? `Usually best: ${BEST_TIMES[p.id].label}` : "") : p.manualOnly ? "No posting API — use Share myself" : `Missing: ${p.missing.join(", ")}`}>
                           <input type="checkbox" disabled={!available(p)} checked={chosen.includes(p.id) && available(p)}
                             onChange={(e) => setChosen(e.target.checked ? [...chosen, p.id] : chosen.filter((c) => c !== p.id))} />
-                          <span>{PLATFORM_SHORT[p.id] ?? p.name}{hour !== null && goodNow(p.id, hour) && <i className="now-dot" title="Good time to post right now" />}</span>
+                          <span>{PLATFORM_SHORT[p.id] ?? p.name}{hour !== null && goodNow(p.id, hour) && <i className="now-dot" title="Good time to post right now" />}
+                            {mode === "smart" && chosen.includes(p.id) && <small className={`dlv ${p.connected ? "auto" : ""}`}>{p.connected ? "⚡ auto" : "✋ you share"}</small>}</span>
                         </label>
                       ))}
                     </div>
                   </div>
                 ))}
-                {mode === "auto" && platforms.some((p) => !p.usable && !p.manualOnly) && <div className="muted small" style={{ marginTop: 6 }}>Connect the rest in <a href="/settings">Accounts</a>.</div>}
+                {mode !== "manual" && platforms.some((p) => !p.connected && !p.manualOnly) && <div className="muted small" style={{ marginTop: 6 }}>Not connected yet: add their keys in <a href="/settings">Accounts</a> to make them automatic.</div>}
               </div>
               {wantsVideo && (
                 <div>
@@ -655,7 +668,7 @@ export function Composer({ opportunities, platforms, tracks: initialTracks, max,
         {stage === "scout"
           ? <button type="button" className="primary dock-go" disabled={!selected.length || (isDigest && selected.length < 2)} onClick={() => goStage("craft")}>{isDigest ? "Craft digest →" : `Craft ${selected.length || ""} →`}</button>
           : <button type="button" className="primary dock-go" disabled={!ready || posting} onClick={post}>
-              {posting ? "Starting…" : mode === "manual" ? "Prepare to share →" : "Post now →"}
+              {posting ? "Starting…" : goLabel}
             </button>}
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
