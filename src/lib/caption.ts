@@ -31,7 +31,14 @@ const siteName = () => {
   try { return pm ? new URL(pm).hostname.replace(/^www\./, "") : null } catch { return null }
 }
 /** TikTok, Instagram and YouTube Shorts: captions can't hold a tappable link, so point at the profile link. */
-const bioLine = (find: string) => [`🔗 Apply: tap the link in our bio, then search ${find}`, siteName() && `🌐 ${siteName()}`].filter(Boolean).join("\n")
+// YouTube has no "bio": the tappable link sits under the channel name, so say that there.
+// `alsoDirect` = the caption already has the job's own link above, so this line is the backup way in.
+const bioLine = (find: string, platform = "", alsoDirect = false) => [
+  platform === "youtube"
+    ? `🔗 ${alsoDirect ? "Or open" : "Apply: open"} our channel, tap the link under our name, then search ${find}`
+    : `🔗 Apply: tap the link in our bio, then search ${find}`,
+  siteName() && `🌐 ${siteName()}`,
+].filter(Boolean).join("\n")
 
 /** Cut long text at a word boundary. */
 function clip(s: string, max: number) {
@@ -111,7 +118,10 @@ export function buildCaption(o: Opportunity, p: PlatformInfo): string {
     clip(o.summary ?? "", 400),
   ]
   if (o.eligibility.length) lines.push("", "✅ Who can apply:", ...o.eligibility.slice(0, 4).map((e) => `• ${clip(e, 120)}`))
-  if (p.linksDead) lines.push("", bioLine(`“${searchTerm(o.title)}”`))
+  // YouTube: the job's own link goes in the description too (not tappable in a Short, but it is copyable, and it is
+  // tappable when the description is opened on a computer), with the channel-link route as the backup.
+  if (p.id === "youtube" && link) lines.push("", `👉 Apply now: ${link}`, bioLine(`“${searchTerm(o.title)}”`, p.id, true))
+  else if (p.linksDead) lines.push("", bioLine(`“${searchTerm(o.title)}”`, p.id))
   else if (link) lines.push("", `👉 Apply: ${link}`)
   lines.push("", hashtags(o, p.linksDead ? 8 : 5, p.id === "youtube" ? ["Shorts"] : []))
 
@@ -176,11 +186,11 @@ export function buildDigestCaption(title: string, opps: Opportunity[], p: Platfo
       `${NUMS[i]} ${o.title}`,
       `🏛 ${o.organization}${place(o) ? ` · 📍 ${place(o)}` : ""}`,
       o.deadline && `⏳ Deadline: ${formatDeadline(o.deadline)}`,
-      !p.linksDead && link && `👉 ${link}`,
+      (!p.linksDead || p.id === "youtube") && link && `👉 ${link}`,
     ].filter(Boolean).join("\n")
   })
   const footer = p.linksDead
-    ? [bioLine("any title above"), "", digestTags(opps, 8, p.id === "youtube" ? ["Shorts"] : [])]
+    ? [bioLine("any title above", p.id, p.id === "youtube"), "", digestTags(opps, 8, p.id === "youtube" ? ["Shorts"] : [])]
     : ["Save this post and share it with someone who needs it. 🙌", "", digestTags(opps, 5)]
   let text = [head, "", ...blocks.flatMap((b) => [b, ""]), ...footer].join("\n").replace(/\n{3,}/g, "\n\n").trim()
   if ([...text].length > p.captionLimit) text = [...text].slice(0, p.captionLimit - 1).join("") + "…"

@@ -36,6 +36,9 @@ export function shortsTitle(title: string): string {
 
 export const publishYouTube: Publisher = async ({ caption, title, file }) => {
   const token = await accessToken()
+  // Checked before every upload, so a wrong login can never post to another channel.
+  const { myChannel, checkChannel } = await import("../connect/youtube")
+  checkChannel(await myChannel(token))
   const bytes = await fs.readFile(file)
   const privacy = process.env.YOUTUBE_PRIVACY?.trim() || "public"
   const meta = {

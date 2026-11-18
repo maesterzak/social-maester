@@ -15,11 +15,20 @@ export function start(): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${q}`
 }
 
-async function channelName(token: string): Promise<string> {
-  const { data } = await fetchJson<{ items?: { snippet: { title: string } }[] }>(
+/** The channel this login posts to. */
+export async function myChannel(token: string): Promise<{ id: string; title: string }> {
+  const { data } = await fetchJson<{ items?: { id: string; snippet: { title: string } }[] }>(
     "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true", { headers: { Authorization: `Bearer ${token}` } }, "YouTube channel")
   if (!data.items?.length) throw new PlatformError("This Google account has no YouTube channel — create one on youtube.com first")
-  return data.items[0].snippet.title
+  return { id: data.items[0].id, title: data.items[0].snippet.title }
+}
+
+/** YOUTUBE_CHANNEL_ID in .env locks posting to one channel (Social Maester's own); any other login is refused. */
+export function checkChannel(ch: { id: string; title: string }) {
+  const only = process.env.YOUTUBE_CHANNEL_ID?.trim()
+  if (only && ch.id !== only) {
+    throw new PlatformError(`That login is for the channel “${ch.title}”. Social Maester only posts to its own channel — connect again and pick that channel.`)
+  }
 }
 
 export async function callback(q: URLSearchParams): Promise<string> {
@@ -35,13 +44,16 @@ export async function callback(q: URLSearchParams): Promise<string> {
       }),
     }, "YouTube token")
   if (!tok.access_token || !tok.refresh_token) throw new PlatformError(`Google login failed: ${tok.error_description ?? "no refresh token"}`)
-  const name = await channelName(tok.access_token)
+  const ch = await myChannel(tok.access_token)
+  checkChannel(ch)
   run("DELETE FROM kv WHERE key = 'youtube_token'")
-  saveConnection("youtube", name, { YOUTUBE_REFRESH_TOKEN: tok.refresh_token })
-  return name
+  saveConnection("youtube", ch.title, { YOUTUBE_REFRESH_TOKEN: tok.refresh_token, YOUTUBE_CONNECTED_CHANNEL: ch.id })
+  return ch.title
 }
 
 export async function test(): Promise<string> {
   const { accessToken } = await import("../platforms/youtube")
-  return channelName(await accessToken())
+  const ch = await myChannel(await accessToken())
+  checkChannel(ch)
+  return `${ch.title} (channel ${ch.id})`
 }
